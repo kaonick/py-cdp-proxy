@@ -8,3 +8,10 @@ refs from :https://github.com/chromedp/chromedp-proxy
 ```shell
 $ python cdp_proxy -l "ip:port"
 ``` 
+
+
+## Change Log
+
+### 0.1.0:2025/03
+* Initial release
+* add create and open chrome browser.

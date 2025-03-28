@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+import time
 from contextlib import asynccontextmanager
 from typing import Optional
 import aiofiles
@@ -15,6 +16,11 @@ import uvicorn
 from fastapi import FastAPI, Request, WebSocket, HTTPException
 from starlette.responses import Response
 import websockets
+import os
+import subprocess
+import signal
+import tempfile
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -30,7 +36,16 @@ parser.add_argument("-l", "--listen", default="localhost:9223", help="listen add
 parser.add_argument("-r", "--remote", default="localhost:9222", help="remote address")
 parser.add_argument("-n", "--no-log", action="store_true", help="disable logging to file")
 parser.add_argument("--log", default="logs/cdp-%s.log", help="log file mask")
+parser.add_argument("-rb", "--run_browser", default=True, help="run browser")
+parser.add_argument("-c", "--chrome_path", default="google-chrome", help="chrome exec path in linux")
+parser.add_argument("-cw", "--chrome_path_win", default="C:/Program Files/Google/Chrome/Application/chrome.exe", help="chrome exec path in windows")
+
+
 args = parser.parse_args()
+# Reverse proxy setup (equivalent to httputil.NewSingleHostReverseProxy)
+remote_url = f"http://{args.remote}"
+remote_port = args.remote.split(":")[-1]
+listen_port = args.listen.split(":")[-1]
 
 # Constants
 INCOMING_BUFFER_SIZE = 10 * 1024 * 1024  # 10MB
@@ -39,12 +54,30 @@ OUTGOING_BUFFER_SIZE = 25 * 1024 * 1024  # 25MB
 # Clean filename regex (equivalent to Go's cleanRE)
 clean_re = re.compile(r"[^a-zA-Z0-9_\-\.]")
 
+def create_remote_browser(port:int=9222,user_profile_path:str=None):
+    if user_profile_path is None:
+        user_profile_path = tempfile.mkdtemp()
+    # exeFilePath = f'C:\Program Files\Google\Chrome\Application\chrome.exe --remote-debugging-port={port} --remote-allow-origins=* --user-data-dir="{user_profile_path}"'
+    if os.name == 'nt':
+        chrome_path = args.chrome_path_win
+    else:
+        chrome_path = args.chrome_path
+    exeFilePath = f'{chrome_path} --remote-debugging-port={port} --incognito -remote-allow-origins=* --user-data-dir="{user_profile_path}"'
+    try:
+        p = subprocess.Popen(exeFilePath)
+        print(p.pid) # the pid
+        time.sleep(1)
+        return p.pid,port
+    except Exception as err:
+        print("Error ...")
+        print(err)
+        return None,None
+
+if args.run_browser:
+    pid,port=create_remote_browser(port=int(remote_port))
+
 # FastAPI app
 app = FastAPI()
-
-# Reverse proxy setup (equivalent to httputil.NewSingleHostReverseProxy)
-remote_url = f"http://{args.remote}"
-listen_port = args.listen.split(":")[-1]
 
 
 async def reverse_proxy(request: Request):
