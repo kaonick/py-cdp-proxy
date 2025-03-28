@@ -62,7 +62,7 @@ def create_remote_browser(port:int=9222,user_profile_path:str=None):
         chrome_path = args.chrome_path_win
     else:
         chrome_path = args.chrome_path
-    exeFilePath = f'{chrome_path} --remote-debugging-port={port} --incognito -remote-allow-origins=* --user-data-dir="{user_profile_path}"'
+    exeFilePath = f'{chrome_path} --remote-debugging-port={port} --incognito -remote-allow-origins=* --user-data-dir={user_profile_path}'
     try:
         p = subprocess.Popen(exeFilePath)
         print(p.pid) # the pid
