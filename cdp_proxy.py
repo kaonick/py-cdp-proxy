@@ -5,7 +5,7 @@ Edited by: @nick
 import asyncio
 import json
 import logging
-import os
+
 import re
 import time
 from contextlib import asynccontextmanager
@@ -17,10 +17,10 @@ from fastapi import FastAPI, Request, WebSocket, HTTPException
 from starlette.responses import Response
 import websockets
 import os
-import subprocess
-import signal
 import tempfile
+import subprocess
 
+from browser_utils import check_pid_alive
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -76,12 +76,25 @@ def create_remote_browser(port:int=9222,user_profile_path:str=None):
         print("Error ...")
         print(err)
         return None,None
-
+now_pid=None
 if args.run_browser:
     pid,port=create_remote_browser(port=int(remote_port))
+    now_pid=pid
 
 # FastAPI app
 app = FastAPI()
+
+async def check_browser(request: Request):
+    global now_pid
+    if now_pid is None or not check_pid_alive(now_pid):
+        # Restart the browser
+        pid,port=create_remote_browser(port=int(remote_port))
+        now_pid=pid
+        return Response(content=json.dumps({"status": f"re start browser={pid}:{port}"}), status_code=200)
+
+    return Response(content=json.dumps({"status": f"running:{now_pid}"}), status_code=200)
+
+
 
 
 async def reverse_proxy(request: Request):
@@ -213,6 +226,7 @@ async def websocket_endpoint(websocket: WebSocket, id: str):
 
 
 # HTTP routes for reverse proxy
+app.add_api_route("/check_browser", check_browser, methods=["GET"])
 app.add_api_route("/json", reverse_proxy, methods=["GET", "POST", "PUT", "DELETE"])
 app.add_api_route("/{path:path}", reverse_proxy, methods=["GET", "POST", "PUT", "DELETE"])
 
